@@ -1,6 +1,7 @@
 # Proyecto Redes e Infraestructura
 
-# Controller
+
+# Controller #
 
 const { Router } = require('express');
 const router = Router();
@@ -89,7 +90,8 @@ router.patch('/productos/:id/estado', async (req, res) => {
 module.exports = router;
 
 
-# MODEL
+
+# MODEL #
 const mysql = require('mysql2/promise');
 
 const connection = mysql.createPool({
@@ -161,8 +163,7 @@ module.exports = {
 };
 
 
-# INDEX
-
+# INDEX #
 const express = require('express');
 const productosController = require('./controllers/productosController');
 const morgan = require('morgan'); 
