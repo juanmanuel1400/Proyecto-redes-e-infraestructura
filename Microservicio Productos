@@ -1,0 +1,178 @@
+# Controller
+
+const { Router } = require('express');
+const router = Router();
+const productosModel = require('../models/productosModel');
+
+// OBTENER TODO EL CATÁLOGO
+router.get('/productos', async (req, res) => {
+    try {
+        const result = await productosModel.traerProductos();
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(500).json({ error: "Error al obtener los productos", detalle: error.message });
+    }
+});
+
+// OBTENER UN SOLO PRODUCTO POR SU ID
+router.get('/productos/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const result = await productosModel.traerProducto(id);
+        
+        if (result.length === 0) {
+            return res.status(404).json({ mensaje: "Producto no encontrado" });
+        }
+        res.status(200).json(result[0]);
+    } catch (error) {
+        res.status(500).json({ error: "Error al obtener el producto", detalle: error.message });
+    }
+});
+
+// CREAR UN NUEVO PRODUCTO
+router.post('/productos', async (req, res) => {
+    try {
+        await productosModel.crearProducto(req.body);
+        res.status(201).json({ mensaje: "Producto creado con éxito" });
+    } catch (error) {
+        res.status(500).json({ error: "Error al crear el producto", detalle: error.message });
+    }
+});
+
+// 4. ACTUALIZAR INFORMACIÓN GENERAL 
+router.put('/productos/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        await productosModel.actualizarProducto(id, req.body);
+        res.status(200).json({ mensaje: "Información del producto actualizada" });
+    } catch (error) {
+        res.status(500).json({ error: "Error al actualizar el producto", detalle: error.message });
+    }
+});
+
+// 5. ACTUALIZAR SOLO EL INVENTARIO
+router.patch('/productos/:id/stock', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { stock } = req.body;
+
+        if (stock < 0) {
+            return res.status(400).json({ mensaje: "El stock no puede ser menor de cero" });
+        }
+
+        await productosModel.actualizarStock(id, stock);
+        res.status(200).json({ mensaje: "Stock del producto actualizado" });
+    } catch (error) {
+        res.status(500).json({ error: "Error al actualizar el stock", detalle: error.message });
+    }
+});
+
+// 6. ACTIVAR O DESACTIVAR PRODUCTO
+router.patch('/productos/:id/estado', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { estado } = req.body;
+
+        if (!['activo', 'inactivo', 'agotado'].includes(estado)) {
+            return res.status(400).json({ mensaje: "Estado inválido. Use 'activo', 'inactivo' o 'agotado'" });
+        }
+
+        await productosModel.actualizarEstado(id, estado);
+        res.status(200).json({ mensaje: `El estado del producto ahora es: ${estado}` });
+    } catch (error) {
+        res.status(500).json({ error: "Error al actualizar el estado", detalle: error.message });
+    }
+});
+
+module.exports = router;
+
+
+# MODEL
+const mysql = require('mysql2/promise');
+
+const connection = mysql.createPool({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'productospq'
+});
+
+// OBTENER TODO EL CATÁLOGO
+async function traerProductos() {
+    const result = await connection.query('SELECT * FROM productos');
+    return result[0];
+}
+
+// OBTENER UN SOLO PRODUCTO POR SU ID
+async function traerProducto(id) {
+    const result = await connection.query('SELECT * FROM productos WHERE id_producto = ?', [id]);
+    return result[0];
+}
+
+// CREAR UN NUEVO PRODUCTO
+async function crearProducto(datos) {
+    const { 
+        nombre, descripcion, categoria, talla, precio, 
+        stock, imagen_url, indicacion_postquirurgica, estado 
+    } = datos;
+
+    const result = await connection.query(
+        `INSERT INTO productos 
+        (nombre, descripcion, categoria, talla, precio, stock, imagen_url, indicacion_postquirurgica, estado) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [nombre, descripcion, categoria, talla, precio, stock || 0, imagen_url, indicacion_postquirurgica, estado || 'activo']
+    );
+    return result;
+}
+
+// ACTUALIZAR INFORMACIÓN GENERAL 
+async function actualizarProducto(id, datos) {
+    const { nombre, descripcion, categoria, talla, precio, imagen_url, indicacion_postquirurgica } = datos;
+    const result = await connection.query(
+        `UPDATE productos 
+         SET nombre = ?, descripcion = ?, categoria = ?, talla = ?, precio = ?, imagen_url = ?, indicacion_postquirurgica = ? 
+         WHERE id_producto = ?`,
+        [nombre, descripcion, categoria, talla, precio, imagen_url, indicacion_postquirurgica, id]
+    );
+    return result;
+}
+
+// ACTUALIZAR SOLO EL INVENTARIO
+async function actualizarStock(id, stock) {
+    const result = await connection.query('UPDATE productos SET stock = ? WHERE id_producto = ?', [stock, id]);
+    return result;
+}
+
+// ACTIVAR O DESACTIVAR PRODUCTO
+async function actualizarEstado(id, estado) {
+    const result = await connection.query('UPDATE productos SET estado = ? WHERE id_producto = ?', [estado, id]);
+    return result;
+}
+
+module.exports = {
+    traerProductos, 
+    traerProducto, 
+    crearProducto, 
+    actualizarProducto, 
+    actualizarStock, 
+    actualizarEstado
+};
+
+
+# INDEX
+
+const express = require('express');
+const productosController = require('./controllers/productosController');
+const morgan = require('morgan'); 
+
+const app = express();
+
+app.use(morgan('dev'));
+app.use(express.json());
+
+
+app.use('/api', productosController);
+
+app.listen(3002, () => {
+  console.log('Microservicio Productos ejecutándose en el puerto 3002');
+});
